@@ -123,6 +123,7 @@ import java.lang.reflect.Method;
 import java.util.Objects;
 import java.util.Optional;
 
+// JVMTI FFI 封装：加载 jvmti 库并提供常用接口调用。
 public final class JVMTI {
     private JVMTI() {
     }
@@ -130,6 +131,7 @@ public final class JVMTI {
     @DoNotShrink
     static final Arena JVMTI_SCOPE = Arena.ofAuto();
 
+    // JVMTI 接口表布局（函数指针顺序与 OpenJDK 定义一致）。
     public static final GroupLayout JVMTI_INTERFACE_LAYOUT = structLayout(
             ADDRESS.withName("reserved1"),
             ADDRESS.withName("SetEventNotificationMode"),
@@ -287,14 +289,17 @@ public final class JVMTI {
             ADDRESS.withName("GetObjectSize"),
             ADDRESS.withName("GetLocalInstance")
     );
+    // jvmtiEnv 指向接口表的指针布局。
     public static final AddressLayout jvmtiEnv_LAYOUT
             = ADDRESS.withTargetLayout(JVMTI_INTERFACE_LAYOUT);
 
+    // 根据 ART 是否启用调试库选择 JVMTI 动态库名。
     private static final String JVMTI_NAME = VM.isDebugVMLibrary() ? "libopenjdkjvmtid.so" : "libopenjdkjvmti.so";
     @ApiSensitive
     public static final SymbolLookup JVMTI = JavaForeignAccess.libraryLookup(
             RawNativeLibraries.cload(JVMTI_NAME, LibDL.ART_CALLER), JVMTI_SCOPE);
 
+    // JVMTI 初始化与卸载入口。
     @DoNotShrinkType
     @DoNotOptimize
     private abstract static class Init {
@@ -317,6 +322,7 @@ public final class JVMTI {
     private static final long JVMTI_ENV;
 
     static {
+        // 获取 JVMTI 环境指针，必要时初始化 ArtPlugin。
         final int kArtTiVersion = JVMTI_VERSION_1_2 | 0x40000000;
         int version = ART_INDEX < A9 ? JVMTI_VERSION : kArtTiVersion;
         long JVM = getJavaVMPtr();
@@ -337,9 +343,11 @@ public final class JVMTI {
             }
             JVMTI_ENV = ptr.get(ADDRESS, 0).nativeAddress();
         }
+        // 将 GetPotentialCapabilities 替换为返回全能力。
         ForceAllPotentialCapabilities();
     }
 
+    // 获取 jvmtiEnv 指针的 MemorySegment 视图。
     public static MemorySegment getJVMTIEnvPtr() {
         class Holder {
             static final MemorySegment env = MemorySegment
@@ -348,6 +356,7 @@ public final class JVMTI {
         return Holder.env;
     }
 
+    // 获取 JVMTI 接口表本体。
     public static MemorySegment getJVMTIInterface() {
         class Holder {
             static final MemorySegment jvmti_interface = JVMTI
@@ -357,11 +366,13 @@ public final class JVMTI {
         return Holder.jvmti_interface;
     }
 
+    // 通过接口表字段名查找函数指针。
     public static MemorySegment getJVMTIInterfaceFunction(String name) {
         return getJVMTIInterface().get(ADDRESS,
                 JVMTI_INTERFACE_LAYOUT.byteOffset(groupElement(name)));
     }
 
+    // 将接口表映射为 SymbolLookup，便于 BulkLinker 绑定。
     public static SymbolLookup getJVMTIInterfaceLookup() {
         return (name) -> {
             try {
@@ -372,6 +383,7 @@ public final class JVMTI {
         };
     }
 
+    // JVMTI 能力位映射到布尔字段，便于 Java 侧读写。
     public static class JVMTICapabilities {
         public static MemoryLayout LAYOUT = structLayout(JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT);
 
@@ -464,6 +476,7 @@ public final class JVMTI {
                     '}';
         }
 
+        // 按位读取/设置 capability 标志。
         private static boolean bit(long bits, int index) {
             return (bits & 1L << index) != 0;
         }
@@ -473,6 +486,7 @@ public final class JVMTI {
         }
 
         static void set(JVMTICapabilities caps, long value) {
+            // 从位图填充到字段。
             caps.can_tag_objects = bit(value, 0);
             caps.can_generate_field_modification_events = bit(value, 1);
             caps.can_generate_field_access_events = bit(value, 2);
@@ -517,6 +531,7 @@ public final class JVMTI {
         }
 
         static long get(JVMTICapabilities caps) {
+            // 从字段组合回位图。
             long out = 0;
             out = bit(out, 0, caps.can_tag_objects);
             out = bit(out, 1, caps.can_generate_field_modification_events);
@@ -563,6 +578,7 @@ public final class JVMTI {
         }
     }
 
+    // 通过替换 GetPotentialCapabilities，实现返回全能力位。
     private static void ForceAllPotentialCapabilities() throws JVMTIException {
         class Holder {
             private static final long ALL_CAPS = (~0L) >>> (64 - 41);
@@ -574,6 +590,7 @@ public final class JVMTI {
             static {
                 final String name = "function";
                 MemorySegment getter = generateFunctionCodeSegment((context, module, builder) -> {
+                    // 生成简单的桩函数：写入 ALL_CAPS 并返回 JVMTI_ERROR_NONE。
                     LLVMTypeRef f_type = function_t(int32_t(context), intptr_t(context), ptr_t(int128_t(context)));
                     LLVMValueRef function = LLVMAddFunction(module, name, f_type);
                     LLVMValueRef[] args = LLVMGetParams(function);
@@ -595,6 +612,7 @@ public final class JVMTI {
                 () -> putWordN(JVMTI_ENV, getJVMTIInterface().nativeAddress()));
     }
 
+    // JVMTI 原生函数绑定。
     @DoNotShrinkType
     @DoNotOptimize
     @SuppressWarnings("SameParameterValue")
@@ -730,6 +748,7 @@ public final class JVMTI {
         static final Native INSTANCE = BulkLinker.generateImpl(JVMTI_SCOPE, Native.class, getJVMTIInterfaceLookup());
     }
 
+    // 将 JVMTI 错误码转换为异常。
     private static void checkError(int error) {
         if (error == JVMTI_ERROR_NONE) {
             return;
@@ -737,6 +756,7 @@ public final class JVMTI {
         throw new JVMTIException(error);
     }
 
+    // 将错误码映射为可读名称。
     public static String GetErrorName(int error) {
         return switch (error) {
             case JVMTI_ERROR_NONE -> "NONE";
@@ -798,6 +818,7 @@ public final class JVMTI {
         };
     }
 
+    // 重定义多个类的字节码。
     @SafeVarargs
     public static void RedefineClasses(Pair<Class<?>, byte[]>... class_definitions) throws JVMTIException {
         Objects.requireNonNull(class_definitions);
@@ -847,10 +868,12 @@ public final class JVMTI {
         }
     }
 
+    // 重定义单个类的字节码。
     public static void RedefineClass(Class<?> klass, byte[] data) throws JVMTIException {
         RedefineClasses(new Pair<>(klass, data));
     }
 
+    // 获取对象占用的大小（字节）。
     public static long GetObjectSize(Object obj) throws JVMTIException {
         try (Arena scope = Arena.ofConfined()) {
             MemorySegment size_ptr = scope.allocate(JAVA_LONG);
@@ -859,6 +882,7 @@ public final class JVMTI {
         }
     }
 
+    // 读取当前可用的 JVMTI 能力集。
     public static void GetPotentialCapabilities(JVMTICapabilities capabilities) throws JVMTIException {
         Objects.requireNonNull(capabilities);
         try (Arena scope = Arena.ofConfined()) {
@@ -868,6 +892,7 @@ public final class JVMTI {
         }
     }
 
+    // 申请增加 JVMTI 能力。
     public static void AddCapabilities(JVMTICapabilities capabilities) throws JVMTIException {
         Objects.requireNonNull(capabilities);
         try (Arena scope = Arena.ofConfined()) {
@@ -877,6 +902,7 @@ public final class JVMTI {
         }
     }
 
+    // 放弃已持有的 JVMTI 能力。
     public static void RelinquishCapabilities(JVMTICapabilities capabilities) throws JVMTIException {
         Objects.requireNonNull(capabilities);
         try (Arena scope = Arena.ofConfined()) {
@@ -886,16 +912,17 @@ public final class JVMTI {
         }
     }
 
-    // Used in JVMTIEvents
+    // 设置 JVMTI 事件回调表（供 JVMTIEvents 使用）。
     static void SetEventCallbacks(long callbacks, int size_of_callbacks) throws JVMTIException {
         checkError(Native.INSTANCE.SetEventCallbacks(JVMTI_ENV, callbacks, size_of_callbacks));
     }
 
-    // Used in JVMTIEvents
+    // 切换 JVMTI 事件通知模式（供 JVMTIEvents 使用）。
     static void SetEventNotificationMode(int mode, int event_type, Thread event_thread) throws JVMTIException {
         checkError(Native.INSTANCE.SetEventNotificationMode(JVMTI_ENV, mode, event_type, event_thread));
     }
 
+    // 设置/清除断点。
     public static void SetBreakpoint(Method method, long location) throws JVMTIException {
         checkError(Native.INSTANCE.SetBreakpoint(JVMTI_ENV, JNIUtils.FromReflectedMethod(method), location));
     }
@@ -904,6 +931,7 @@ public final class JVMTI {
         checkError(Native.INSTANCE.ClearBreakpoint(JVMTI_ENV, JNIUtils.FromReflectedMethod(method), location));
     }
 
+    // 线程控制相关接口。
     public static void SuspendThread(Thread thread) throws JVMTIException {
         checkError(Native.INSTANCE.SuspendThread(JVMTI_ENV, thread));
     }
@@ -920,6 +948,7 @@ public final class JVMTI {
         checkError(Native.INSTANCE.InterruptThread(JVMTI_ENV, thread));
     }
 
+    // 判断是否为当前线程（部分 JVMTI 操作不支持当前线程）。
     @AlwaysInline
     private static boolean isCurrent(Thread thread) {
         return thread == Thread.currentThread();
@@ -930,6 +959,7 @@ public final class JVMTI {
         throw new UnsupportedOperationException(op_name + " is unsupported for current thread");
     }
 
+    // 强制指定线程提前返回。
     public static void ForceEarlyReturnObject(Thread thread, Object value) {
         if (isCurrent(thread)) throw UCT("ForceEarlyReturnObject");
         checkError(Native.INSTANCE.ForceEarlyReturnObject(JVMTI_ENV, thread, value));
@@ -960,13 +990,16 @@ public final class JVMTI {
         checkError(Native.INSTANCE.ForceEarlyReturnVoid(JVMTI_ENV, thread));
     }
 
+    // 弹出指定线程的当前栈帧。
     public static void PopFrame(Thread thread) {
         if (isCurrent(thread)) throw UCT("PopFrame");
         checkError(Native.INSTANCE.PopFrame(JVMTI_ENV, thread));
     }
 
+    // 当前线程调用 JVMTI 会多出若干内部桩帧深度。
     private static final int STUB_DEPTH = 3;
 
+    // 获取线程栈帧数量。
     public static int GetFrameCount(Thread thread) {
         int out;
         try (Arena scope = Arena.ofConfined()) {
@@ -978,6 +1011,7 @@ public final class JVMTI {
         return isCurrent(thread) ? out - STUB_DEPTH : out;
     }
 
+    // 获取指定深度的 this/实例对象。
     public static Object GetLocalInstance(Thread thread, int depth) {
         depth = isCurrent(thread) ? depth + STUB_DEPTH : depth;
         try (Arena scope = Arena.ofConfined()) {
@@ -992,6 +1026,7 @@ public final class JVMTI {
         }
     }
 
+    // 获取局部变量中的对象引用。
     public static Object GetLocalObject(Thread thread, int depth, int slot) {
         depth = isCurrent(thread) ? depth + STUB_DEPTH : depth;
         try (Arena scope = Arena.ofConfined()) {
@@ -1006,6 +1041,7 @@ public final class JVMTI {
         }
     }
 
+    // 获取局部变量中的 int。
     public static int GetLocalInt(Thread thread, int depth, int slot) {
         depth = isCurrent(thread) ? depth + STUB_DEPTH : depth;
         try (Arena scope = Arena.ofConfined()) {
@@ -1016,6 +1052,7 @@ public final class JVMTI {
         }
     }
 
+    // 获取局部变量中的 long。
     public static long GetLocalLong(Thread thread, int depth, int slot) {
         depth = isCurrent(thread) ? depth + STUB_DEPTH : depth;
         try (Arena scope = Arena.ofConfined()) {
@@ -1026,6 +1063,7 @@ public final class JVMTI {
         }
     }
 
+    // 获取局部变量中的 float。
     public static float GetLocalFloat(Thread thread, int depth, int slot) {
         depth = isCurrent(thread) ? depth + STUB_DEPTH : depth;
         try (Arena scope = Arena.ofConfined()) {
@@ -1036,6 +1074,7 @@ public final class JVMTI {
         }
     }
 
+    // 获取局部变量中的 double。
     public static double GetLocalDouble(Thread thread, int depth, int slot) {
         depth = isCurrent(thread) ? depth + STUB_DEPTH : depth;
         try (Arena scope = Arena.ofConfined()) {
@@ -1046,26 +1085,31 @@ public final class JVMTI {
         }
     }
 
+    // 设置局部变量中的对象引用。
     public static void SetLocalObject(Thread thread, int depth, int slot, Object value) {
         depth = isCurrent(thread) ? depth + STUB_DEPTH : depth;
         checkError(Native.INSTANCE.SetLocalObject(JVMTI_ENV, thread, depth, slot, value));
     }
 
+    // 设置局部变量中的 int。
     public static void SetLocalInt(Thread thread, int depth, int slot, int value) {
         depth = isCurrent(thread) ? depth + STUB_DEPTH : depth;
         checkError(Native.INSTANCE.SetLocalInt(JVMTI_ENV, thread, depth, slot, value));
     }
 
+    // 设置局部变量中的 long。
     public static void SetLocalLong(Thread thread, int depth, int slot, long value) {
         depth = isCurrent(thread) ? depth + STUB_DEPTH : depth;
         checkError(Native.INSTANCE.SetLocalLong(JVMTI_ENV, thread, depth, slot, value));
     }
 
+    // 设置局部变量中的 float。
     public static void SetLocalFloat(Thread thread, int depth, int slot, float value) {
         depth = isCurrent(thread) ? depth + STUB_DEPTH : depth;
         checkError(Native.INSTANCE.SetLocalFloat(JVMTI_ENV, thread, depth, slot, value));
     }
 
+    // 设置局部变量中的 double。
     public static void SetLocalDouble(Thread thread, int depth, int slot, double value) {
         depth = isCurrent(thread) ? depth + STUB_DEPTH : depth;
         checkError(Native.INSTANCE.SetLocalDouble(JVMTI_ENV, thread, depth, slot, value));

@@ -45,10 +45,12 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Objects;
 
+// 提供 ART 方法 Hook 能力：入口点替换、trampoline 生成与调用转发。
 public class Hooks {
     static {
         // Classes cannot be loaded and initialized during "SuspendAll"
         {
+            // 提前初始化所需类，避免 SuspendAll 期间触发加载。
             ClassUtils.ensureClassInitialized(EntryPoints.class);
             var method = getDeclaredMethod(Runnable.class, "run");
             ArtMethodUtils.makeExecutableNonCompilable(method);
@@ -60,6 +62,7 @@ public class Hooks {
     private static void ensureDeclaringClassInitialized(Executable ex) {
         int flags = ArtMethodUtils.getExecutableFlags(ex);
         // For static constructor hook, the class CANNOT be initialized
+        // 非静态构造器场景需要确保可见初始化完成。
         if ((flags & ACC_CONSTRUCTOR) == 0 || (flags & ACC_STATIC) == 0) {
             ClassUtils.ensureClassVisiblyInitialized(ex.getDeclaringClass());
         }
@@ -68,6 +71,7 @@ public class Hooks {
     public static void deoptimize(Executable ex) {
         ensureDeclaringClassInitialized(ex);
         try (var ignored = new ScopedSuspendAll(false)) {
+            // 强制走解释器入口，避免已编译代码影响。
             ArtMethodUtils.makeExecutableNonCompilable(ex);
             long entry_point = Modifier.isNative(ex.getModifiers()) ?
                     EntryPoints.getGenericJniTrampoline() :
@@ -77,6 +81,7 @@ public class Hooks {
     }
 
     private static byte[] toArray(long value) {
+        // 以小端序写出 8 字节地址。
         //noinspection PointlessBitwiseExpression
         return new byte[]{
                 (byte) (value >> 0),
@@ -91,6 +96,7 @@ public class Hooks {
     }
 
     private static byte[] getTrampolineArray(long art_method, long entry_point) {
+        // 按当前指令集生成跳板机器码。
         byte[] m = toArray(art_method);
         byte[] e = toArray(entry_point);
         return switch (CURRENT_INSTRUCTION_SET) {
@@ -150,11 +156,13 @@ public class Hooks {
         //TODO: check signatures
         Objects.requireNonNull(target);
         Objects.requireNonNull(hooker);
+        // 将新入口点保存在可回收的共享 Arena 中。
         Arena scope = Arena.ofShared();
         SunCleaner.systemCleaner().register(target.getDeclaringClass(), scope::close);
         MemorySegment new_entry_point = NativeCodeBlob.makeCodeBlob(scope,
                 getTrampolineArray(getArtMethod(hooker), hooker_entry_point))[0];
         try (var ignored = new ScopedSuspendAll(false)) {
+            // 替换目标方法入口点，强制走 trampoline。
             ArtMethodUtils.makeExecutableNonCompilable(target);
             ArtMethodUtils.changeExecutableFlags(target, kAccFastInterpreterToInterpreterInvoke, 0);
             ArtMethodUtils.setExecutableEntryPoint(target, new_entry_point.nativeAddress());
@@ -169,6 +177,7 @@ public class Hooks {
     }
 
     private static long getEntryPoint(Executable ex, EntryPointType type) {
+        // DIRECT 使用通用入口，CURRENT 使用当前 entry point。
         return type == EntryPointType.DIRECT ?
                 (Modifier.isNative(ex.getModifiers()) ?
                         EntryPoints.getGenericJniTrampoline() :
@@ -183,6 +192,7 @@ public class Hooks {
     public static void hook(Executable target, Executable hooker, EntryPointType hooker_type) {
         ensureDeclaringClassInitialized(target);
         ensureDeclaringClassInitialized(hooker);
+        // 将 target 入口指向 hooker。
         hook(target, hooker, getEntryPoint(hooker, hooker_type));
     }
 
@@ -195,6 +205,7 @@ public class Hooks {
         ensureDeclaringClassInitialized(first);
         ensureDeclaringClassInitialized(second);
         long old_first_entry_point = getEntryPoint(first, first_type);
+        // 先把 first 指向 second，再把 second 指回旧入口点。
         hook(first, second, getEntryPoint(second, second_type));
         hook(second, first, old_first_entry_point);
     }
@@ -210,6 +221,7 @@ public class Hooks {
         ensureDeclaringClassInitialized(target);
         ensureDeclaringClassInitialized(hooker);
         ensureDeclaringClassInitialized(backup);
+        // backup 保存原入口点，target 指向 hooker。
         hook(backup, target, getEntryPoint(target, target_type));
         hook(target, hooker, getEntryPoint(hooker, hooker_type));
     }
@@ -219,6 +231,7 @@ public class Hooks {
     private static final String FIELD_NAME = "handle";
 
     private static byte[] generateInvoker(MethodType type) {
+        // 生成一个通过静态 MethodHandle 字段调用的中转类。
         ProtoId proto = ProtoId.of(type);
 
         TypeId mh_id = TypeId.of(MethodHandle.class);
@@ -261,12 +274,14 @@ public class Hooks {
             invokers_cache = new WeakReferenceCache<>();
 
     private static Class<?> loadInvoker(MethodType type) {
+        // 每种签名生成一次 invoker dex，并用空 ClassLoader 加载。
         ClassLoader loader = Utils.newEmptyClassLoader(Object.class.getClassLoader());
         var dexfile = DexFileUtils.openDexFile(invokers_cache.get(type, Hooks::generateInvoker));
         return DexFileUtils.loadClass(dexfile, INVOKER_NAME, loader);
     }
 
     private static Method initInvoker(MethodType type, HookTransformer transformer) {
+        // 创建 invoker 并注入 transformer 的 MethodHandle。
         var erased = type.erase(); // TODO: maybe use basic type?
         var invoker_class = loadInvoker(erased);
         var hooker_method = getDeclaredMethod(invoker_class, METHOD_NAME, InvokeAccess.ptypes(erased));
@@ -287,6 +302,7 @@ public class Hooks {
         Objects.requireNonNull(target);
         Objects.requireNonNull(hooker);
 
+        // 生成 invoker，作为 hooker 的可执行入口。
         var invoker = initInvoker(rawMethodTypeOf(target), hooker);
         SunCleaner.systemCleaner().register(target.getDeclaringClass(), () -> Utils.reachabilityFence(invoker));
         hookSwap(target, target_type, invoker, hooker_type);

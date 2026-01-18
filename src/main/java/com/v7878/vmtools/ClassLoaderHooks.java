@@ -40,16 +40,19 @@ import java.util.function.BiFunction;
 
 import dalvik.system.DexFile;
 
+// 为指定 ClassLoader 注入 findClass hook，用于拦截类加载。
 public class ClassLoaderHooks {
     private static final Object LOCK = new Object();
 
     @FunctionalInterface
     public interface FindClassBackup {
+        // 调用原始 findClass 的回退接口。
         Class<?> findClass(ClassLoader loader, String name) throws ClassNotFoundException;
     }
 
     @FunctionalInterface
     public interface FindClassI {
+        // 自定义 findClass 实现，可选择调用 original。
         Class<?> findClass(ClassLoader loader, String name,
                            FindClassBackup original) throws ClassNotFoundException;
     }
@@ -70,6 +73,7 @@ public class ClassLoaderHooks {
             try {
                 return impl.findClass(thiz, name, original);
             } catch (ClassNotFoundException e) {
+                // 保持原始异常语义。
                 return AndroidUnsafe.throwException(e);
             }
         }
@@ -77,6 +81,7 @@ public class ClassLoaderHooks {
 
     @SuppressWarnings("SameParameterValue")
     private static Method findMethod(Class<?> clazz, String name, Class<?>... args) {
+        // 在隐藏的虚方法列表中向上查找目标方法。
         while (clazz != null) {
             var method = searchMethod(getHiddenVirtualMethods(clazz), name, false, args);
             if (method != null) return method;
@@ -90,6 +95,7 @@ public class ClassLoaderHooks {
         Objects.requireNonNull(target);
         Objects.requireNonNull(impl);
         synchronized (LOCK) {
+            // 确保目标 ClassLoader 可被继承与替换。
             Class<?> target_class = target.getClass();
             makeClassInheritable(target_class);
             ClassLoader target_loader = target_class.getClassLoader();
@@ -111,6 +117,7 @@ public class ClassLoaderHooks {
             var super_find_id = MethodId.of(hook_id, "superFindClass",
                     ProtoId.of(TypeId.of(Class.class), hook_id, TypeId.of(String.class)));
 
+            // 生成覆盖 findClass 的 Hook 子类。
             ClassDef hook_def = ClassBuilder.build(hook_id, cb -> cb
                     .withSuperClass(TypeId.of(target_class))
                     .withFlags(ACC_PUBLIC | ACC_FINAL)
@@ -151,6 +158,7 @@ public class ClassLoaderHooks {
             TypeId backup_id = TypeId.ofName(backup_name);
             var backup_find_id = MethodId.of(backup_id, "apply", apply_proto);
 
+            // 生成调用原始 findClass 的备份实现。
             ClassDef backup_def = ClassBuilder.build(backup_id, cb -> cb
                     .withSuperClass(TypeId.OBJECT)
                     .withInterfaces(bf)
@@ -179,8 +187,10 @@ public class ClassLoaderHooks {
             Field impl_f = getDeclaredField(hook, "impl");
             nothrows_run(() -> impl_f.set(null, new FindClassCallback(impl, backup_instance)));
 
+            // Hook 类实例大小必须与原类一致，才能安全替换对象类型。
             check(objectSizeField(target_class) == objectSizeField(hook), AssertionError::new);
 
+            // 替换对象的类指针，实现对 findClass 的拦截。
             setObjectClass(target, hook);
         }
     }

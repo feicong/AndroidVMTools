@@ -16,6 +16,7 @@ import com.v7878.unsafe.foreign.BulkLinker;
 import com.v7878.unsafe.foreign.BulkLinker.CallSignature;
 import com.v7878.unsafe.foreign.BulkLinker.LibrarySymbol;
 
+// 通过 ART 的 ScopedSuspendAll 暂停/恢复所有线程。
 public class ScopedSuspendAll implements FineClosable {
     @DoNotShrinkType
     @DoNotOptimize
@@ -24,6 +25,7 @@ public class ScopedSuspendAll implements FineClosable {
         @DoNotShrink
         private static final Arena SCOPE = Arena.ofAuto();
 
+        // 传递给 ART 的挂起原因字符串。
         static final MemorySegment CAUSE = SCOPE.allocateFrom("Hook");
 
         @LibrarySymbol(name = "_ZN3art16ScopedSuspendAllC2EPKcb")
@@ -38,11 +40,13 @@ public class ScopedSuspendAll implements FineClosable {
     }
 
     public ScopedSuspendAll(boolean long_suspend) {
+        // 创建临时 ScopedSuspendAll 实例，构造即挂起。
         Native.INSTANCE.SuspendAll(0, Native.CAUSE.nativeAddress(), long_suspend);
     }
 
     @Override
     public void close() {
+        // 释放挂起，恢复线程执行。
         Native.INSTANCE.ResumeAll(0);
     }
 }

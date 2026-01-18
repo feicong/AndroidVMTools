@@ -1,5 +1,6 @@
 package com.v7878.ti;
 
+// JVMTI 常量定义：版本、线程状态、事件、错误码等。
 public final class JVMTIConstants {
     private JVMTIConstants() {
     }
@@ -11,7 +12,7 @@ public final class JVMTIConstants {
             JVMTI_VERSION_1_2 = 0x30010200,
             JVMTI_VERSION = 0x30010201; // version: 1.2.1
 
-    /* Thread State Flags */
+    /* 线程状态标志 */
     public static final int
             JVMTI_THREAD_STATE_ALIVE = 0x0001,
             JVMTI_THREAD_STATE_TERMINATED = 0x0002,
@@ -29,7 +30,7 @@ public final class JVMTIConstants {
             JVMTI_THREAD_STATE_VENDOR_1 = 0x10000000,
             JVMTI_THREAD_STATE_VENDOR_2 = 0x20000000,
             JVMTI_THREAD_STATE_VENDOR_3 = 0x40000000;
-    /* java.lang.Thread.State Conversion Masks */
+    /* java.lang.Thread.State 转换掩码 */
     public static final int
             JVMTI_JAVA_LANG_THREAD_STATE_MASK =
             JVMTI_THREAD_STATE_TERMINATED | JVMTI_THREAD_STATE_ALIVE | JVMTI_THREAD_STATE_RUNNABLE
@@ -41,22 +42,22 @@ public final class JVMTIConstants {
             JVMTI_JAVA_LANG_THREAD_STATE_BLOCKED = JVMTI_THREAD_STATE_ALIVE | JVMTI_THREAD_STATE_BLOCKED_ON_MONITOR_ENTER,
             JVMTI_JAVA_LANG_THREAD_STATE_WAITING = JVMTI_THREAD_STATE_ALIVE | JVMTI_THREAD_STATE_WAITING | JVMTI_THREAD_STATE_WAITING_INDEFINITELY,
             JVMTI_JAVA_LANG_THREAD_STATE_TIMED_WAITING = JVMTI_THREAD_STATE_ALIVE | JVMTI_THREAD_STATE_WAITING | JVMTI_THREAD_STATE_WAITING_WITH_TIMEOUT;
-    /* Thread Priority Constants */
+    /* 线程优先级 */
     public static final int
             JVMTI_THREAD_MIN_PRIORITY = 1,
             JVMTI_THREAD_NORM_PRIORITY = 5,
             JVMTI_THREAD_MAX_PRIORITY = 10;
-    /* Heap Filter Flags */
+    /* Heap 过滤标志 */
     public static final int
             JVMTI_HEAP_FILTER_TAGGED = 0x4,
             JVMTI_HEAP_FILTER_UNTAGGED = 0x8,
             JVMTI_HEAP_FILTER_CLASS_TAGGED = 0x10,
             JVMTI_HEAP_FILTER_CLASS_UNTAGGED = 0x20;
-    /* Heap Visit Control Flags */
+    /* Heap 遍历控制标志 */
     public static final int
             JVMTI_VISIT_OBJECTS = 0x100,
             JVMTI_VISIT_ABORT = 0x8000;
-    /* Heap Reference Enumeration */
+    /* Heap 引用枚举 */
     public static final int
             JVMTI_HEAP_REFERENCE_CLASS = 1,
             JVMTI_HEAP_REFERENCE_FIELD = 2,
@@ -75,7 +76,7 @@ public final class JVMTIConstants {
             JVMTI_HEAP_REFERENCE_JNI_LOCAL = 25,
             JVMTI_HEAP_REFERENCE_THREAD = 26,
             JVMTI_HEAP_REFERENCE_OTHER = 27;
-    /* Primitive Type Enumeration */
+    /* 基本类型枚举 */
     public static final int
             JVMTI_PRIMITIVE_TYPE_BOOLEAN = 90,
             JVMTI_PRIMITIVE_TYPE_BYTE = 66,
@@ -85,12 +86,12 @@ public final class JVMTIConstants {
             JVMTI_PRIMITIVE_TYPE_LONG = 74,
             JVMTI_PRIMITIVE_TYPE_FLOAT = 70,
             JVMTI_PRIMITIVE_TYPE_DOUBLE = 68;
-    /* Heap Object Filter Enumeration */
+    /* Heap 对象过滤枚举 */
     public static final int
             JVMTI_HEAP_OBJECT_TAGGED = 1,
             JVMTI_HEAP_OBJECT_UNTAGGED = 2,
             JVMTI_HEAP_OBJECT_EITHER = 3;
-    /* Heap Root Kind Enumeration */
+    /* Heap Root 枚举 */
     public static final int
             JVMTI_HEAP_ROOT_JNI_GLOBAL = 1,
             JVMTI_HEAP_ROOT_SYSTEM_CLASS = 2,
@@ -99,7 +100,7 @@ public final class JVMTIConstants {
             JVMTI_HEAP_ROOT_JNI_LOCAL = 5,
             JVMTI_HEAP_ROOT_THREAD = 6,
             JVMTI_HEAP_ROOT_OTHER = 7;
-    /* Object Reference Enumeration */
+    /* 对象引用枚举 */
     public static final int
             JVMTI_REFERENCE_CLASS = 1,
             JVMTI_REFERENCE_FIELD = 2,
@@ -110,12 +111,12 @@ public final class JVMTIConstants {
             JVMTI_REFERENCE_INTERFACE = 7,
             JVMTI_REFERENCE_STATIC_FIELD = 8,
             JVMTI_REFERENCE_CONSTANT_POOL = 9;
-    /* Iteration Control Enumeration */
+    /* 迭代控制枚举 */
     public static final int
             JVMTI_ITERATION_CONTINUE = 1,
             JVMTI_ITERATION_IGNORE = 2,
             JVMTI_ITERATION_ABORT = 0;
-    /* Class Status Flags */
+    /* 类状态标志 */
     public static final int
             JVMTI_CLASS_STATUS_VERIFIED = 1,
             JVMTI_CLASS_STATUS_PREPARED = 2,
@@ -123,11 +124,11 @@ public final class JVMTIConstants {
             JVMTI_CLASS_STATUS_ERROR = 8,
             JVMTI_CLASS_STATUS_ARRAY = 16,
             JVMTI_CLASS_STATUS_PRIMITIVE = 32;
-    /* Event Enable/Disable */
+    /* 事件开关 */
     public static final int
             JVMTI_ENABLE = 1,
             JVMTI_DISABLE = 0;
-    /* Extension Function/Event Parameter Types */
+    /* 扩展函数/事件参数类型 */
     public static final int
             JVMTI_TYPE_JBYTE = 101,
             JVMTI_TYPE_JCHAR = 102,
@@ -146,7 +147,7 @@ public final class JVMTIConstants {
             JVMTI_TYPE_CCHAR = 115,
             JVMTI_TYPE_CVOID = 116,
             JVMTI_TYPE_JNIENV = 117;
-    /* Extension Function/Event Parameter Kinds */
+    /* 扩展函数/事件参数方向 */
     public static final int
             JVMTI_KIND_IN = 91,
             JVMTI_KIND_IN_PTR = 92,
@@ -155,50 +156,50 @@ public final class JVMTIConstants {
             JVMTI_KIND_ALLOC_ALLOC_BUF = 95,
             JVMTI_KIND_OUT = 96,
             JVMTI_KIND_OUT_BUF = 97;
-    /* Timer Kinds */
+    /* 计时器类型 */
     public static final int
             JVMTI_TIMER_USER_CPU = 30,
             JVMTI_TIMER_TOTAL_CPU = 31,
             JVMTI_TIMER_ELAPSED = 32;
-    /* Phases of execution */
+    /* 运行阶段 */
     public static final int
             JVMTI_PHASE_ONLOAD = 1,
             JVMTI_PHASE_PRIMORDIAL = 2,
             JVMTI_PHASE_START = 6,
             JVMTI_PHASE_LIVE = 4,
             JVMTI_PHASE_DEAD = 8;
-    /* Version Interface Types */
+    /* 版本接口类型 */
     public static final int
             JVMTI_VERSION_INTERFACE_JNI = 0x00000000,
             JVMTI_VERSION_INTERFACE_JVMTI = 0x30000000;
-    /* Version Masks */
+    /* 版本掩码 */
     public static final int
             JVMTI_VERSION_MASK_INTERFACE_TYPE = 0x70000000,
             JVMTI_VERSION_MASK_MAJOR = 0x0FFF0000,
             JVMTI_VERSION_MASK_MINOR = 0x0000FF00,
             JVMTI_VERSION_MASK_MICRO = 0x000000FF;
-    /* Version Shifts */
+    /* 版本位移 */
     public static final int
             JVMTI_VERSION_SHIFT_MAJOR = 16,
             JVMTI_VERSION_SHIFT_MINOR = 8,
             JVMTI_VERSION_SHIFT_MICRO = 0;
-    /* Verbose Flag Enumeration */
+    /* Verbose 标志枚举 */
     public static final int
             JVMTI_VERBOSE_OTHER = 0,
             JVMTI_VERBOSE_GC = 1,
             JVMTI_VERBOSE_CLASS = 2,
             JVMTI_VERBOSE_JNI = 4;
-    /* JLocation Format Enumeration */
+    /* 位置格式枚举 */
     public static final int
             JVMTI_JLOCATION_JVMBCI = 1,
             JVMTI_JLOCATION_MACHINEPC = 2,
             JVMTI_JLOCATION_OTHER = 0;
-    /* Resource Exhaustion Flags */
+    /* 资源耗尽标志 */
     public static final int
             JVMTI_RESOURCE_EXHAUSTED_OOM_ERROR = 0x0001,
             JVMTI_RESOURCE_EXHAUSTED_JAVA_HEAP = 0x0002,
             JVMTI_RESOURCE_EXHAUSTED_THREADS = 0x0004;
-    /* Errors */
+    /* 错误码 */
     public static final int
             JVMTI_ERROR_NONE = 0,
             JVMTI_ERROR_INVALID_THREAD = 10,
@@ -250,7 +251,7 @@ public final class JVMTIConstants {
             JVMTI_ERROR_UNATTACHED_THREAD = 115,
             JVMTI_ERROR_INVALID_ENVIRONMENT = 116,
             JVMTI_ERROR_MAX = 116;
-    /* Event IDs */
+    /* 事件 ID */
     public static final int
             JVMTI_MIN_EVENT_TYPE_VAL = 50,
             JVMTI_EVENT_VM_INIT = 50,

@@ -35,44 +35,53 @@ import com.v7878.unsafe.invoke.Transformers.AbstractTransformer;
 import java.lang.invoke.MethodHandle;
 import java.lang.reflect.Method;
 
+// JVMTI 事件回调绑定与通知开关管理。
 public class JVMTIEvents {
     @FunctionalInterface
     public interface BreakpointCallback {
+        // 断点命中回调。
         void invoke(Thread thread, Method method, long location);
     }
 
     @FunctionalInterface
     public interface GarbageCollectionCallback {
+        // GC 开始/结束回调。
         void invoke(boolean start_or_finish);
     }
 
     @FunctionalInterface
     public interface ClassLoadCallback {
+        // 类加载完成回调。
         void invoke(Thread thread, Class<?> klass);
     }
 
     @FunctionalInterface
     public interface ClassPrepareCallback {
+        // 类准备完成回调。
         void invoke(Thread thread, Class<?> klass);
     }
 
     @FunctionalInterface
     public interface MonitorContendedEnterCallback {
+        // 线程进入监视器竞争回调。
         void invoke(Thread thread, Object object);
     }
 
     @FunctionalInterface
     public interface MonitorContendedEnteredCallback {
+        // 线程进入监视器成功回调。
         void invoke(Thread thread, Object object);
     }
 
     @FunctionalInterface
     public interface MonitorWaitCallback {
+        // 线程进入 Object.wait 回调。
         void invoke(Thread thread, Object object, long timeout);
     }
 
     @FunctionalInterface
     public interface MonitorWaitedCallback {
+        // 线程从 Object.wait 返回回调。
         void invoke(Thread thread, Object object, boolean timed_out);
     }
 
@@ -174,6 +183,7 @@ public class JVMTIEvents {
     //     JNIEnv* jni_env,
     //     jthread thread);
 
+    // JVMTI 事件回调表结构布局。
     public static final GroupLayout JVMTI_EVENT_CALLBACKS_LAYOUT = structLayout(
             ADDRESS.withName("VMInit"),
             ADDRESS.withName("VMDeath"),
@@ -219,22 +229,27 @@ public class JVMTIEvents {
     private static final int CALLBACKS_SIZE = Math.toIntExact(CALLBACKS.byteSize());
 
     private static void updateMode(boolean enable, int event_type, Thread event_thread) {
+        // 启用或关闭 JVMTI 事件通知。
         JVMTI.SetEventNotificationMode(enable ? JVMTI_ENABLE : JVMTI_DISABLE, event_type, event_thread);
     }
 
     private static void updateCallbacks(boolean enable, long offset, MemorySegment value) {
+        // 更新回调表并提交到 JVMTI。
         CALLBACKS.set(ADDRESS, offset, enable ? value : MemorySegment.NULL);
         JVMTI.SetEventCallbacks(CALLBACKS_ADDRESS, CALLBACKS_SIZE);
     }
 
     private static long callbackOffset(String name) {
+        // 根据字段名定位回调在结构中的偏移。
         return JVMTI_EVENT_CALLBACKS_LAYOUT.byteOffset(groupElement(name));
     }
 
     private static long getWord(StackFrameAccessor accessor, int index) {
+        // 兼容 32/64 位架构读取指针大小参数。
         return IS64BIT ? accessor.getLong(index) : accessor.getInt(index) & 0xffffffffL;
     }
 
+    // 注册/注销断点事件回调。
     public static void setBreakpointCallback(BreakpointCallback callback, Thread event_thread) {
         class Holder {
             static volatile BreakpointCallback java_callback;
@@ -267,6 +282,7 @@ public class JVMTIEvents {
         setBreakpointCallback(callback, null);
     }
 
+    // 注册/注销 GC 开始/结束回调。
     public static void setGarbageCollectionCallback(GarbageCollectionCallback callback, Thread event_thread) {
         class Holder {
             static volatile GarbageCollectionCallback java_callback;
@@ -310,6 +326,7 @@ public class JVMTIEvents {
         setGarbageCollectionCallback(callback, null);
     }
 
+    // 注册/注销类加载回调。
     public static void setClassLoadCallback(ClassLoadCallback callback, Thread event_thread) {
         class Holder {
             static volatile ClassLoadCallback java_callback;
@@ -341,6 +358,7 @@ public class JVMTIEvents {
         setClassLoadCallback(callback, null);
     }
 
+    // 注册/注销类准备回调。
     public static void setClassPrepareCallback(ClassPrepareCallback callback, Thread event_thread) {
         class Holder {
             static volatile ClassPrepareCallback java_callback;
@@ -372,6 +390,7 @@ public class JVMTIEvents {
         setClassPrepareCallback(callback, null);
     }
 
+    // 注册/注销监视器竞争进入回调。
     public static void setMonitorContendedEnterCallback(MonitorContendedEnterCallback callback, Thread event_thread) {
         class Holder {
             static volatile MonitorContendedEnterCallback java_callback;
@@ -403,6 +422,7 @@ public class JVMTIEvents {
         setMonitorContendedEnterCallback(callback, null);
     }
 
+    // 注册/注销监视器进入成功回调。
     public static void setMonitorContendedEnteredCallback(MonitorContendedEnteredCallback callback, Thread event_thread) {
         class Holder {
             static volatile MonitorContendedEnteredCallback java_callback;
@@ -434,6 +454,7 @@ public class JVMTIEvents {
         setMonitorContendedEnteredCallback(callback, null);
     }
 
+    // 注册/注销 Object.wait 回调。
     public static void setMonitorWaitCallback(MonitorWaitCallback callback, Thread event_thread) {
         class Holder {
             static volatile MonitorWaitCallback java_callback;
@@ -466,6 +487,7 @@ public class JVMTIEvents {
         setMonitorWaitCallback(callback, null);
     }
 
+    // 注册/注销 Object.wait 返回回调。
     public static void setMonitorWaitedCallback(MonitorWaitedCallback callback, Thread event_thread) {
         class Holder {
             static volatile MonitorWaitedCallback java_callback;

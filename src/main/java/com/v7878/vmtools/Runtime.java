@@ -22,6 +22,7 @@ import com.v7878.unsafe.foreign.BulkLinker.LibrarySymbol;
 
 import java.util.Objects;
 
+// 封装 ART Runtime 的调试状态与反优化相关调用。
 public class Runtime {
     public enum DebugState {
         // This doesn't support any debug features / method tracing. This is the expected state usually.
@@ -36,6 +37,7 @@ public class Runtime {
         kJavaDebuggableAtInit
     }
 
+    // 通过 libart 符号调用 Runtime 内部接口。
     @DoNotShrinkType
     @DoNotOptimize
     private abstract static class Native {
@@ -59,6 +61,7 @@ public class Runtime {
     public static void setRuntimeDebugState(DebugState state) {
         Objects.requireNonNull(state);
         int value;
+        // Android 13 及以下是布尔开关，Android 14+ 使用枚举值。
         if (ART_INDEX <= A13) {
             value = state == kNonJavaDebuggable ? 0 : 1;
         } else {
@@ -70,6 +73,7 @@ public class Runtime {
     public static void DeoptimizeBootImage() {
         var instance = Native.INSTANCE;
         var runtime = JNIUtils.getRuntimePtr();
+        // 在 SuspendAll 期间触发全局 deoptimize。
         try (var ignored = new ScopedSuspendAll(false)) {
             instance.DeoptimizeBootImage(runtime);
         }

@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.stream.Stream;
 
+// 解析 /proc/<pid>/maps 获取内存映射信息。
 public class MMap {
     public record MMapEntry(long start, long end, String perms,
                             long offset, int dev_major, int dev_minor,
@@ -14,6 +15,7 @@ public class MMap {
     }
 
     public static Stream<MMapEntry> maps(String pid) {
+        // 按行解析 maps 文件，提取映射区间与权限信息。
         var file = Paths.get((String.format("/proc/%s/maps", pid)));
 
         try {

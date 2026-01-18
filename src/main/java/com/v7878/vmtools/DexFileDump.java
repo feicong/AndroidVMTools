@@ -71,12 +71,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.zip.Adler32;
 
+// 从 ART DexFile 结构读取/修复 dex 内容，兼容 protected 与 compact dex。
 public final class DexFileDump {
     private DexFileDump() {
     }
 
     private static final int VERSION_OFFSET = 4;
 
+    // 从 DexFile 结构体读取 header 指针。
     public static long getDexFileHeader(long dexfile_struct) {
         class Holder {
             static final long header_offset = DEXFILE_LAYOUT.byteOffset(groupElement("header_"));
@@ -88,6 +90,7 @@ public final class DexFileDump {
      * Standard dex and Dex container: same as (begin, size).
      * Compact: only main section of this dexfile.
      */
+    // 返回 header + size 的 dex 视图。
     public static MemorySegment getDexFile(long dexfile_struct) {
         long header = getDexFileHeader(dexfile_struct);
         long size = getIntN(header + FILE_SIZE_OFFSET);
@@ -99,6 +102,7 @@ public final class DexFileDump {
         static final long data_size_offset;
 
         static {
+            // A14 之后 DexFile 结构布局变化。
             if (ART_INDEX >= A14) {
                 data_begin_offset = DEXFILE_LAYOUT.byteOffset(
                         groupElement("data_"), groupElement("array_"));
@@ -116,6 +120,7 @@ public final class DexFileDump {
      * Dex container: all dex files (starting from the first header).
      * Compact: shared data which is located after all non-shared data.
      */
+    // 获取 dex 数据区（普通/容器/compact 的主数据区域）。
     public static MemorySegment getDexFileData(long dexfile_struct) {
         if (ART_INDEX < A9) {
             return getDexFile(dexfile_struct);
@@ -133,6 +138,7 @@ public final class DexFileDump {
                 static final long is_compact_dex_offset = DEXFILE_LAYOUT
                         .byteOffset(groupElement("is_compact_dex_"));
             }
+            // Compact dex 在 ART 中单独标识。
             return getBooleanN(dexfile_struct + Holder.is_compact_dex_offset);
         }
     }
@@ -142,6 +148,7 @@ public final class DexFileDump {
     @SuppressWarnings("PointlessBitwiseExpression")
     private static final int DEX_DEFAULT_VERSION = ('0' << 0) | ('3' << 8) | ('8' << 16) | ('\0' << 24);
 
+    // 判断是否为被保护/伪造头部的 dex。
     public static boolean isProtectedDex(long dexfile_struct) {
         long header = getDexFileHeader(dexfile_struct);
         return getIntN(header) != DEX_MAGIC || getIntN(header + FILE_SIZE_OFFSET) == 0;
@@ -164,6 +171,7 @@ public final class DexFileDump {
         return version == ('0' << 0 | '4' << 8 | '1' << 16 | '\0' << 24);
     }
 
+    // 修复被保护 dex 的头部与索引表，可选重算校验/签名。
     public static void fixProtectedDexHeader(
             long dexfile_struct, boolean skip_checksum_and_signature) {
         if (isCompactDex(dexfile_struct)) {
@@ -181,12 +189,14 @@ public final class DexFileDump {
         }
         int file_size = Math.toIntExact(getWordN(dexfile_struct + Holder.data_size_offset));
 
+        // 写回基础头部字段。
         putIntN(header, DEX_MAGIC);
         putIntN(header + VERSION_OFFSET, version);
         putIntN(header + FILE_SIZE_OFFSET, file_size);
         putIntN(header + HEADER_SIZE_OFFSET, BASE_HEADER_SIZE);
         putIntN(header + ENDIAN_TAG_OFFSET, ENDIAN_CONSTANT);
 
+        // 根据 map 列表补齐各索引表的位置与数量。
         int map_offset = getIntN(header + MAP_OFFSET);
         int map_size = getIntN(header + map_offset);
         for (int i = 0; i < map_size; i++) {
@@ -226,6 +236,7 @@ public final class DexFileDump {
             return;
         }
 
+        // 重新计算签名与校验和。
         MemorySegment dex_segment = MemorySegment.ofAddress(header).reinterpret(file_size);
         ByteBuffer dex_buffer = dex_segment.asByteBuffer();
         dex_buffer.order(ByteOrder.nativeOrder());
@@ -256,6 +267,7 @@ public final class DexFileDump {
         fixProtectedDexHeader(dexfile_struct, true);
     }
 
+    // 只拷贝可读映射区域，避免访问无权限内存。
     private static byte[] copyReadable(long address, long size) {
         byte[] out = new byte[Math.toIntExact(size)];
 
@@ -285,6 +297,7 @@ public final class DexFileDump {
         return out;
     }
 
+    // 读取 dex 原始字节，自动处理 protected/compact 情况。
     public static byte[] getDexFileContent(long dexfile_struct) {
         if (isProtectedDex(dexfile_struct)) {
             fixProtectedDexHeader(dexfile_struct);
@@ -308,6 +321,7 @@ public final class DexFileDump {
         return getDexFileContent(getDexFileStruct(clazz));
     }
 
+    // 容器 dex 需要读取 header_off，普通/compact 返回 0。
     public static int getHeaderOffset(long dexfile_struct) {
         if (isCompactDex(dexfile_struct)) return 0;
         long header = getDexFileHeader(dexfile_struct);
@@ -319,6 +333,7 @@ public final class DexFileDump {
                 "Unsupported dex version: " + Integer.toHexString(version));
     }
 
+    // 将类按 DexFile 结构体分组，并记录 class_def 索引。
     private static Map<Long, Set<Integer>> getStructMap(Class<?>... classes) {
         Map<Long, Set<Integer>> data = new HashMap<>();
         for (var clazz : classes) {
@@ -333,6 +348,7 @@ public final class DexFileDump {
         return data;
     }
 
+    // 只读取指定类的 dex 定义。
     public static Dex readDex(Class<?>... classes) {
         var data = getStructMap(classes);
         var defs = new ArrayList<ClassDef>(classes.length);
@@ -345,6 +361,7 @@ public final class DexFileDump {
         return Dex.of(defs);
     }
 
+    // 读取 dex 并返回带缓存的 ClassDef 结果。
     public static List<Pair<ClassDef, DexReaderCache>> readWithCache(Class<?>... classes) {
         var data = getStructMap(classes);
         var defs = new ArrayList<Pair<ClassDef, DexReaderCache>>(classes.length);

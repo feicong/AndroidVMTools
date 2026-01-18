@@ -18,10 +18,12 @@ import com.v7878.unsafe.DexFileUtils;
 
 import java.lang.invoke.MethodType;
 
+// 构造临时 Dex 类并提取 ART 的通用入口点（JNI trampoline 与解释器桥接）。
 public class EntryPoints {
     private static final long generic_jni_trampoline;
     private static final long to_interpreter_bridge;
 
+    // 使用非常规 JNI 签名，避免 ART 命中缓存的 trampoline。
     // Art can cache trampolines for common native call types, so we have to do something uncommon
     private static final MethodType JNI_TYPE = MethodType.methodType(Object.class,
             Object.class, int.class, long.class, float.class, double.class,
@@ -32,6 +34,7 @@ public class EntryPoints {
             Object.class, int.class, long.class, float.class, double.class);
 
     static {
+        // 动态生成包含 native 与抽象方法的测试类，用于拿到入口地址。
         TypeId obj_id = TypeId.OBJECT;
 
         String test_name = EntryPoints.class.getName() + "$Test";
@@ -56,6 +59,7 @@ public class EntryPoints {
         var dexfile = DexFileUtils.openDexFile(DexIO.write(Dex.of(test_def)));
         var clazz = DexFileUtils.loadClass(dexfile, test_name, EntryPoints.class.getClassLoader());
 
+        // 解析方法的可执行入口点。
         generic_jni_trampoline = getExecutableEntryPoint(
                 getDeclaredMethod(clazz, "jni", JNI_TYPE.parameterArray()));
         to_interpreter_bridge = getExecutableEntryPoint(
